@@ -1,0 +1,69 @@
+import tensorflow as tf
+from tensorflow import keras
+from tensorflow.keras.datasets import mnist
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, Dropout
+from tensorflow.keras.utils import to_categorical
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping, TensorBoard
+import matplotlib.pyplot as plt
+
+# Load and preprocess the MNIST dataset
+(train_images, train_labels), (test_images, test_labels) = mnist.load_data()
+
+# Normalize pixel values to be between 0 and 1
+train_images, test_images = train_images / 255.0, test_images / 255.0
+
+# Convert labels to one-hot encoding
+train_labels = to_categorical(train_labels)
+test_labels = to_categorical(test_labels)
+
+# Data augmentation for training
+datagen = ImageDataGenerator(rotation_range=10, width_shift_range=0.1, height_shift_range=0.1, zoom_range=0.1)
+
+# Build a deeper CNN model
+model = Sequential([
+    Conv2D(32, (3, 3), activation='relu', input_shape=(28, 28, 1)),
+    MaxPooling2D((2, 2)),
+    Conv2D(64, (3, 3), activation='relu'),
+    MaxPooling2D((2, 2)),
+    Conv2D(128, (3, 3), activation='relu'),
+    Flatten(),
+    Dense(128, activation='relu'),
+    Dropout(0.5),
+    Dense(10, activation='softmax')
+])
+
+model.compile(optimizer='adam',
+              loss='categorical_crossentropy',
+              metrics=['accuracy'])
+
+# Define callbacks for model training
+model_checkpoint = ModelCheckpoint('best_model.h5', save_best_only=True, save_weights_only=True, monitor='val_loss', mode='min')
+early_stopping = EarlyStopping(monitor='val_loss', patience=5, mode='min')
+tensorboard = TensorBoard(log_dir='./logs', histogram_freq=1)
+
+# Train the model without displaying epoch values
+model.fit(datagen.flow(train_images.reshape(-1, 28, 28, 1), train_labels, batch_size=64),
+          steps_per_epoch=len(train_images) / 64 / 10,
+          validation_data=(test_images.reshape(-1, 28, 28, 1), test_labels),
+          epochs=1,
+          callbacks=[model_checkpoint, early_stopping, tensorboard],
+          verbose=0)  # Set verbose to 0 to suppress epoch values
+
+# Load the best model weights
+model.load_weights('best_model.h5')
+
+# Evaluate the model
+test_loss, test_acc = model.evaluate(test_images.reshape(-1, 28, 28, 1), test_labels)
+print(f'Test accuracy: {test_acc:.4f}')
+
+# Make predictions
+predictions = model.predict(test_images.reshape(-1, 28, 28, 1))
+
+# Visualize a random test image and its prediction
+index = 0  # Change this to any index in the test set
+plt.figure()
+plt.imshow(test_images[index], cmap='gray')
+plt.title(f'Actual: {test_labels[index].argmax()}, Predicted: {predictions[index].argmax()}')
+plt.show()
